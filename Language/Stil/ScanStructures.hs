@@ -24,6 +24,7 @@ import           Text.Parsec.Prim hiding (parse)
 import           Text.Parsec (ParseError(..))
 
 import Language.Stil.Lex (Tok(..))
+import Language.Stil.Prim
 
 data ScanChain =
  ScanChain
@@ -58,8 +59,6 @@ parseScanStructures = do
   rbrace
   return scs
 
--- TODO: simple token matchers
---       idents in any order or missing with default or unknown with warning
 parseScanChain :: Parser ScanChain
 parseScanChain = do
   ident "ScanChain"
@@ -76,46 +75,10 @@ parseScanChain = do
    , unknownAttr
    ])
 
-{-
-  ident "ScanCells"
-  scells <- many (str <|> bang)
-  semi
-  ident "ScanMasterClock"
-  clocks <- many str
-  semi
--}
   rbrace
 
-  -- return $ ScanChain nm len si so sinv scells clocks
   getState
 
-unknownAttr :: Parser ()
-unknownAttr = do
- attr <- anyIdent
- warn ("ignoring unknown attr: " <> attr)
- many (dontMatch TSemi) -- TODO: Balanced braces
- semi
- return ()
-
-warn = traceShowM
-
-str = token show noPos match
- where
-  match (TStr s) = Just s
-  match _        = Nothing
-
-anyIdent = token show noPos match
- where
-  match (TIdent i) = Just i
-  match _          = Nothing
-
--- | Match any token but m
-dontMatch m = token show noPos match
- where
-  match x
-   | x == m    = Nothing
-   | otherwise = Just x
- 
 scanCells :: Parser ()
 scanCells = do
  ident "ScanCells"
@@ -160,32 +123,3 @@ scanLength = do
  semi
  modifyState (\sc -> sc {scLength=len})
 
-int :: Parser Int
-int = toInt <$> matchScientific
- where
-  toInt = fromIntegral . fromJust . as
-  as :: Scientific -> Maybe Int
-  as = toBoundedInteger
-
-matchScientific :: Parser Scientific
-matchScientific = token show noPos m
- where
-  m (TScientific n) = Just n
-  m _               = Nothing
-
-ident :: ByteString -> Parser ()
-ident s = void $ ezToken (TIdent s)
-
-lbrace = ezToken TLBrace
-rbrace = ezToken TRBrace
-semi   = ezToken TSemi
-bang   = ezToken TBang
-ezToken :: Tok -> Parser Tok
-ezToken t = tokenPrim show (\s _ _ -> s) (\x -> maybe (x == t) t)
-
-maybe :: Bool -> a -> Maybe a
-maybe True x = Just x
-maybe False _ = Nothing
-
-noPos :: a -> SourcePos
-noPos t = newPos "" 0 0
